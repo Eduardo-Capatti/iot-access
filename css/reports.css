@@ -1,0 +1,86 @@
+/* ============================================================
+   REPORTS.CSS
+   ============================================================ */
+
+.reports-toolbar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 32px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.reports-toolbar label {
+    font-size: 12px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.filter-select {
+    background: var(--bg-search);
+    border: none;
+    color: white;
+    padding: 11px 16px;
+    border-radius: var(--radius-btn);
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    min-width: 200px;
+}
+.filter-select option { background: #2a2a2a; }
+
+.reports-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+}
+
+.report-card {
+    background: #252525;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+
+.report-card-title {
+    font-size: 14px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.report-card-title i { color: var(--accent-end); }
+
+.report-table-wrapper {
+    max-height: 280px;
+    overflow-y: auto;
+    border-radius: 10px;
+    border: 1px solid #333;
+}
+
+.charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+}
+
+@media (max-width: 900px) {
+    .charts-row { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 18px;
+    height: 260px;
+    position: relative;
+}
