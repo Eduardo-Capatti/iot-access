@@ -28,7 +28,7 @@ export function createAdminClient() {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nas secrets do projeto.");
+    throw new Error("Nao foi possivel iniciar a camada administrativa do sistema.");
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {
@@ -45,7 +45,7 @@ export function createRequestClient(request: Request) {
   const authorization = request.headers.get("Authorization");
 
   if (!supabaseUrl || !anonKey) {
-    throw new Error("Defina SUPABASE_URL e SUPABASE_ANON_KEY nas secrets do projeto.");
+    throw new Error("Nao foi possivel iniciar a conexao autenticada com o sistema.");
   }
 
   return createClient(supabaseUrl, anonKey, {

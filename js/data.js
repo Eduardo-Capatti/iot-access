@@ -2,14 +2,63 @@
    DATA.JS - Estado global e integracao com Supabase
    ============================================================ */
 
+const DEFAULT_ADMIN_FUNCTIONS = {
+    listUsers: 'admin-list-users',
+    createUser: 'admin-create-user',
+    updateUser: 'admin-update-user',
+    deleteUser: 'admin-delete-user',
+};
+
 const AppConfig = {
-    supabaseUrl: window.APP_ENV?.SUPABASE_URL || '',
-    supabaseAnonKey: window.APP_ENV?.SUPABASE_ANON_KEY || '',
-    adminFunctions: {
-        listUsers: window.APP_ENV?.SUPABASE_ADMIN_LIST_USERS_FN || 'admin-list-users',
-        createUser: window.APP_ENV?.SUPABASE_ADMIN_CREATE_USER_FN || 'admin-create-user',
-        updateUser: window.APP_ENV?.SUPABASE_ADMIN_UPDATE_USER_FN || 'admin-update-user',
-        deleteUser: window.APP_ENV?.SUPABASE_ADMIN_DELETE_USER_FN || 'admin-delete-user',
+    supabaseUrl: '',
+    supabaseAnonKey: '',
+    adminFunctions: { ...DEFAULT_ADMIN_FUNCTIONS },
+    loaded: false,
+    loadPromise: null,
+
+    async load() {
+        if (this.loaded) return this;
+        if (this.loadPromise) return this.loadPromise;
+
+        this.loadPromise = (async () => {
+            const response = await fetch('/api/env', {
+                cache: 'no-store',
+                headers: {
+                    Accept: 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Nao foi possivel carregar a configuracao da aplicacao.');
+            }
+
+            const config = await response.json();
+
+            this.supabaseUrl = config?.SUPABASE_URL || '';
+            this.supabaseAnonKey = config?.SUPABASE_ANON_KEY || '';
+            this.adminFunctions = {
+                listUsers: config?.SUPABASE_ADMIN_LIST_USERS_FN || DEFAULT_ADMIN_FUNCTIONS.listUsers,
+                createUser: config?.SUPABASE_ADMIN_CREATE_USER_FN || DEFAULT_ADMIN_FUNCTIONS.createUser,
+                updateUser: config?.SUPABASE_ADMIN_UPDATE_USER_FN || DEFAULT_ADMIN_FUNCTIONS.updateUser,
+                deleteUser: config?.SUPABASE_ADMIN_DELETE_USER_FN || DEFAULT_ADMIN_FUNCTIONS.deleteUser,
+            };
+
+            if (!this.supabaseUrl || !this.supabaseAnonKey) {
+                throw new Error('Nao foi possivel iniciar a conexao com o sistema.');
+            }
+
+            this.loaded = true;
+            return this;
+        })().catch(error => {
+            this.loaded = false;
+            throw error;
+        }).finally(() => {
+            if (!this.loaded) {
+                this.loadPromise = null;
+            }
+        });
+
+        return this.loadPromise;
     },
 };
 
@@ -24,12 +73,6 @@ const ACTION_CODES = {
 // - Em PortaUsuarioStatus, statusPortaUsuario=1 significa acesso bloqueado.
 
 function ensureSupabaseConfig() {
-    if (!AppConfig.supabaseUrl || !AppConfig.supabaseAnonKey) {
-        throw new Error(
-            'Configure as variaveis SUPABASE_URL e SUPABASE_ANON_KEY em js/env.js antes de iniciar o sistema.'
-        );
-    }
-
     if (!window.supabase || typeof window.supabase.createClient !== 'function') {
         throw new Error('Biblioteca do Supabase nao foi carregada.');
     }
@@ -103,9 +146,10 @@ const AppData = {
     accessLogs: [],
     doorRelations: [],
 
-    setupClient() {
+    async setupClient() {
         if (this.supabase) return this.supabase;
 
+        await AppConfig.load();
         ensureSupabaseConfig();
         this.supabase = window.supabase.createClient(AppConfig.supabaseUrl, AppConfig.supabaseAnonKey);
         return this.supabase;
@@ -120,7 +164,7 @@ const AppData = {
     },
 
     async initialize() {
-        this.setupClient();
+        await this.setupClient();
 
         await this.loadCurrentUser();
         await this.refreshAll();

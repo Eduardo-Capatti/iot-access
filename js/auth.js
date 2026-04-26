@@ -80,7 +80,7 @@ function applyRoleUI() {
 }
 
 async function requireAuthenticatedSession() {
-    AppData.setupClient();
+    await AppData.setupClient();
 
     const { data, error } = await AppData.supabase.auth.getSession();
     if (error) throw error;
@@ -95,7 +95,7 @@ async function requireAuthenticatedSession() {
 }
 
 async function redirectIfAuthenticated() {
-    AppData.setupClient();
+    await AppData.setupClient();
 
     const { data, error } = await AppData.supabase.auth.getSession();
     if (error) throw error;
@@ -112,7 +112,7 @@ async function login(event) {
     event.preventDefault();
 
     try {
-        AppData.setupClient();
+        await AppData.setupClient();
         setLoginMessage('');
 
         const email = document.getElementById('login-email').value.trim();
