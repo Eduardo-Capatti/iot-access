@@ -2,6 +2,10 @@
    APP.JS - Inicializacao, navegacao e controle de modais
    ============================================================ */
 
+const DOOR_STATUS_REFRESH_INTERVAL_MS = 10000;
+let doorStatusRefreshTimer = null;
+let doorStatusRefreshInFlight = false;
+
 function handleError(error) {
     console.error(error);
     alert(error?.message || 'Ocorreu um erro ao comunicar com o Supabase.');
@@ -86,6 +90,51 @@ function initializeModals() {
     });
 }
 
+function getDoorSearchValue() {
+    const searchInput = document.querySelector('#section-doors .search-bar');
+    return searchInput?.value || '';
+}
+
+function syncOpenDoorModalStatus() {
+    const modal = document.getElementById('modal-edit-door');
+    if (!modal?.classList.contains('active')) return;
+
+    const doorId = parseInt(document.getElementById('edit-door-id')?.value, 10);
+    if (Number.isNaN(doorId)) return;
+
+    const door = AppData.getDoorById(doorId);
+    if (!door) return;
+
+    const statusInput = document.getElementById('edit-door-status');
+    if (statusInput) {
+        statusInput.value = door.status;
+    }
+}
+
+async function refreshDoorStatusesPeriodically() {
+    if (doorStatusRefreshInFlight || !AppData.supabase || !AppData.currentUser) return;
+
+    doorStatusRefreshInFlight = true;
+
+    try {
+        await AppData.refreshDoorStatuses();
+        renderDoors(getDoorSearchValue());
+        syncOpenDoorModalStatus();
+    } catch (error) {
+        console.error('Falha ao atualizar o status das portas:', error);
+    } finally {
+        doorStatusRefreshInFlight = false;
+    }
+}
+
+function startDoorStatusRefresh() {
+    if (doorStatusRefreshTimer) return;
+
+    doorStatusRefreshTimer = window.setInterval(() => {
+        refreshDoorStatusesPeriodically();
+    }, DOOR_STATUS_REFRESH_INTERVAL_MS);
+}
+
 async function initializeApp() {
     try {
         initializeModals();
@@ -96,6 +145,7 @@ async function initializeApp() {
         applyRoleUI();
         initializePanicButton();
         switchTab('doors');
+        startDoorStatusRefresh();
 
         if (isAdminUser()) {
             renderUsers();

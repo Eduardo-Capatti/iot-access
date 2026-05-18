@@ -209,21 +209,34 @@ const AppData = {
     },
 
     async loadDoors() {
+        const data = await this.fetchDoors();
+        this.doors = data.map(door => this.mapDoorRecord(door));
+
+        await this.loadDoorRelations();
+    },
+
+    async fetchDoors() {
         const { data, error } = await this.supabase
             .from('Porta')
             .select('"idPorta","nomePorta","statusPorta"')
             .order('idPorta', { ascending: true });
 
         if (error) throw error;
+        return data || [];
+    },
 
-        this.doors = (data || []).map(door => ({
+    mapDoorRecord(door) {
+        return {
             id: door.idPorta,
             name: door.nomePorta,
             status: normalizeDoorStatus(door.statusPorta),
             hardware: 'Supabase',
-        }));
+        };
+    },
 
-        await this.loadDoorRelations();
+    async refreshDoorStatuses() {
+        const data = await this.fetchDoors();
+        this.doors = data.map(door => this.mapDoorRecord(door));
     },
 
     async loadDoorRelations() {
@@ -356,6 +369,7 @@ const AppData = {
             .insert({
                 nomePorta: payload.name,
                 statusPorta: denormalizeDoorStatus(payload.status),
+                abrirPorta: false,
             })
             .select('"idPorta","nomePorta","statusPorta"')
             .single();
@@ -437,12 +451,16 @@ const AppData = {
 
         if (error) throw error;
 
-        await this.updateDoor(doorId, {
-            name: door.name,
-            status: 'open',
-        });
+        const { error: triggerError } = await this.supabase
+            .from('Porta')
+            .update({
+                abrirPorta: true,
+            })
+            .eq('idPorta', doorId);
 
-        door.status = 'open';
+        if (triggerError) throw triggerError;
+
+        await this.logAction(ACTION_CODES.update, 'Porta');
     },
 
     async createUser(payload) {

@@ -1,0 +1,12 @@
+js/env.js
+supabase/.temp/
+.env
+.env.*
+!.env.example
+*.local
+node_modules/
+dist/
+build/
+coverage/
+.DS_Store
+Thumbs.db
