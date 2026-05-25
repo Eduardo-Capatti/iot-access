@@ -181,13 +181,31 @@ function initializePanicButton() {
     const panicBtn = document.getElementById('panic-btn');
     if (!panicBtn || panicBtn.dataset.bound === 'true') return;
 
-    panicBtn.addEventListener('click', () => {
-        panicBtn.classList.toggle('active');
-        const isActive = panicBtn.classList.contains('active');
-        document.getElementById('panic-text').textContent = isActive ? 'BLOQUEIO ATIVO' : 'Modo Seguranca';
+    panicBtn.addEventListener('click', async () => {
+        const nextState = !panicBtn.classList.contains('active');
 
-        if (isActive) {
-            alert('MODO DE EMERGENCIA: todos os atuadores foram travados.');
+        try {
+            panicBtn.disabled = true;
+            await AppData.setSecurityMode(nextState);
+            panicBtn.classList.toggle('active', nextState);
+            document.getElementById('panic-text').textContent = nextState ? 'BLOQUEIO ATIVO' : 'Modo Seguranca';
+
+            await AppData.refreshAll();
+            renderDoors();
+            if (isAdminUser()) {
+                renderUsers();
+                if (document.getElementById('section-reports')?.classList.contains('active')) {
+                    renderReports();
+                }
+            }
+
+            if (nextState) {
+                alert('MODO DE EMERGENCIA: todos os acessos foram bloqueados.');
+            }
+        } catch (error) {
+            handleError(error);
+        } finally {
+            panicBtn.disabled = false;
         }
     });
 

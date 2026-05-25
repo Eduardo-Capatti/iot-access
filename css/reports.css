@@ -47,6 +47,20 @@
     box-shadow: 0 4px 14px rgba(0,0,0,0.3);
 }
 
+.report-highlight-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.report-highlight-value {
+    font-size: 42px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
 .report-card-title {
     font-size: 14px;
     color: #888;
@@ -59,6 +73,14 @@
 }
 
 .report-card-title i { color: var(--accent-end); }
+
+.report-header-inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
 
 .report-table-wrapper {
     max-height: 280px;
@@ -83,4 +105,101 @@
     padding: 18px;
     height: 260px;
     position: relative;
+}
+
+.report-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #aaa;
+    font-size: 13px;
+}
+
+.pagination-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.pagination-btn.active {
+    background: var(--accent-end);
+    border-color: var(--accent-end);
+    color: #111;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .reports-toolbar {
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .reports-grid,
+    .charts-row {
+        gap: 16px;
+    }
+
+    .report-card {
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    .report-highlight-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .report-highlight-value {
+        font-size: 34px;
+    }
+
+    .report-card-title {
+        font-size: 12px;
+        margin-bottom: 12px;
+    }
+
+    .report-table-wrapper {
+        max-height: 220px;
+    }
+
+    .chart-wrap {
+        padding: 10px;
+        height: 170px;
+    }
+
+    .report-pagination {
+        gap: 6px;
+        font-size: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+        padding: 7px 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .report-card {
+        padding: 14px;
+    }
+
+    .report-highlight-value {
+        font-size: 30px;
+    }
+
+    .chart-wrap {
+        height: 150px;
+    }
+
+    .report-table-wrapper {
+        max-height: 200px;
+    }
 }

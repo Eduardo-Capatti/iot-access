@@ -3,6 +3,10 @@
    ============================================================ */
 
 .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
     width: var(--sidebar-width);
     background-color: var(--bg-sidebar);
     display: flex;
@@ -10,9 +14,30 @@
     justify-content: space-between;
     align-items: center;
     padding: 20px 0;
-    z-index: 100;
+    z-index: 200;
     box-shadow: 2px 0 12px rgba(0,0,0,0.3);
     flex-shrink: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+}
+
+body.sidebar-open .sidebar {
+    transform: translateX(0);
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.38);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 150;
+}
+
+body.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .nav-group {

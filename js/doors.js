@@ -26,8 +26,11 @@ function renderDoors(filter = '') {
 
 function buildDoorCard(door, isAdmin) {
     const isOpen = door.status === 'open';
+    const isBlocked = door.blocked === true;
     const dotClass = isOpen ? 'dot-open' : 'dot-closed';
-    const statusLabel = isOpen ? 'Aberta' : 'Fechada';
+    const statusLabel = isOpen ? 'Aberta' : (door.opening ? 'Abrindo' : 'Fechada');
+    const situationLabel = isBlocked ? 'Bloqueada' : 'Livre';
+    const situationClass = isBlocked ? 'dot-blocked' : 'dot-open';
     const usersCount = AppData.getUsersForDoor(door.id).length;
 
     const adminActions = isAdmin ? `
@@ -41,6 +44,11 @@ function buildDoorCard(door, isAdmin) {
 
     return `
         <div class="card" id="door-card-${door.id}">
+            ${isBlocked ? `
+                <div class="door-alert-badge" title="Porta bloqueada">
+                    <i class="fas fa-triangle-exclamation"></i>
+                </div>
+            ` : ''}
             <div class="card-header">
                 <span>${door.name}</span>
             </div>
@@ -48,6 +56,10 @@ function buildDoorCard(door, isAdmin) {
                 <div class="card-row">
                     <span class="card-label">Status</span>
                     <span>${statusLabel} <span class="status-dot ${dotClass}"></span></span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Situacao</span>
+                    <span>${situationLabel} <span class="status-dot ${situationClass}"></span></span>
                 </div>
                 ${isAdmin ? `
                 <div class="card-row">

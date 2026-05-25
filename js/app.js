@@ -2,10 +2,6 @@
    APP.JS - Inicializacao, navegacao e controle de modais
    ============================================================ */
 
-const DOOR_STATUS_REFRESH_INTERVAL_MS = 10000;
-let doorStatusRefreshTimer = null;
-let doorStatusRefreshInFlight = false;
-
 function handleError(error) {
     console.error(error);
     alert(error?.message || 'Ocorreu um erro ao comunicar com o Supabase.');
@@ -15,7 +11,15 @@ function isAdminUser() {
     return AppData.currentUser?.type === 1;
 }
 
-function switchTab(tabName) {
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-open');
+}
+
+function closeSidebar() {
+    document.body.classList.remove('sidebar-open');
+}
+
+async function switchTab(tabName) {
     if ((tabName === 'users' || tabName === 'reports') && !isAdminUser()) {
         tabName = 'doors';
     }
@@ -30,7 +34,12 @@ function switchTab(tabName) {
 
     if (tabName === 'doors') renderDoors();
     if (tabName === 'users') renderUsers();
-    if (tabName === 'reports') renderReports();
+    if (tabName === 'reports') {
+        await AppData.refreshAll();
+        renderReports();
+    }
+
+    closeSidebar();
 }
 
 function filterCards(section, value) {
@@ -86,6 +95,7 @@ function initializeModals() {
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             closeAllModals();
+            closeSidebar();
         }
     });
 }
@@ -111,30 +121,6 @@ function syncOpenDoorModalStatus() {
     }
 }
 
-async function refreshDoorStatusesPeriodically() {
-    if (doorStatusRefreshInFlight || !AppData.supabase || !AppData.currentUser) return;
-
-    doorStatusRefreshInFlight = true;
-
-    try {
-        await AppData.refreshDoorStatuses();
-        renderDoors(getDoorSearchValue());
-        syncOpenDoorModalStatus();
-    } catch (error) {
-        console.error('Falha ao atualizar o status das portas:', error);
-    } finally {
-        doorStatusRefreshInFlight = false;
-    }
-}
-
-function startDoorStatusRefresh() {
-    if (doorStatusRefreshTimer) return;
-
-    doorStatusRefreshTimer = window.setInterval(() => {
-        refreshDoorStatusesPeriodically();
-    }, DOOR_STATUS_REFRESH_INTERVAL_MS);
-}
-
 async function initializeApp() {
     try {
         initializeModals();
@@ -145,7 +131,7 @@ async function initializeApp() {
         applyRoleUI();
         initializePanicButton();
         switchTab('doors');
-        startDoorStatusRefresh();
+        RealtimeService.startAll();
 
         if (isAdminUser()) {
             renderUsers();
@@ -155,5 +141,9 @@ async function initializeApp() {
         handleError(error);
     }
 }
+
+window.addEventListener('beforeunload', () => {
+    RealtimeService.stopAll();
+});
 
 document.addEventListener('DOMContentLoaded', initializeApp);

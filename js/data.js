@@ -70,7 +70,7 @@ const ACTION_CODES = {
 
 // Premissas deste frontend:
 // - Perfil admin vem da tabela user_roles, onde admin=true.
-// - Em PortaUsuarioStatus, statusPortaUsuario=1 significa acesso bloqueado.
+// - Em PortaUsuario, status=1 significa acesso bloqueado.
 
 function ensureSupabaseConfig() {
     if (!window.supabase || typeof window.supabase.createClient !== 'function') {
@@ -101,11 +101,6 @@ function resolveUserName(user) {
     };
 
     return metadata.name || metadata.nome || metadata.full_name || user.email || 'Usuario';
-}
-
-function getStatusRow(rows) {
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    return rows[0];
 }
 
 async function getFunctionErrorMessage(error, functionName) {
@@ -144,6 +139,8 @@ const AppData = {
     doors: [],
     users: [],
     accessLogs: [],
+    totalAccessLogs: [],
+    flowAccessLogs: [],
     doorRelations: [],
 
     async setupClient() {
@@ -160,6 +157,8 @@ const AppData = {
         this.doors = [];
         this.users = [];
         this.accessLogs = [];
+        this.totalAccessLogs = [];
+        this.flowAccessLogs = [];
         this.doorRelations = [];
     },
 
@@ -218,7 +217,7 @@ const AppData = {
     async fetchDoors() {
         const { data, error } = await this.supabase
             .from('Porta')
-            .select('"idPorta","nomePorta","statusPorta"')
+            .select('"idPorta","nomePorta","statusPorta","abrirPorta","bloqueada"')
             .order('idPorta', { ascending: true });
 
         if (error) throw error;
@@ -230,6 +229,8 @@ const AppData = {
             id: door.idPorta,
             name: door.nomePorta,
             status: normalizeDoorStatus(door.statusPorta),
+            opening: normalizeDoorOpening(door.abrirPorta),
+            blocked: normalizeDoorBlocked(door.bloqueada),
             hardware: 'Supabase',
         };
     },
@@ -242,15 +243,7 @@ const AppData = {
     async loadDoorRelations() {
         let query = this.supabase
             .from('PortaUsuario')
-            .select(`
-                "idPortaUsuario",
-                "idPorta",
-                "idUsuario",
-                PortaUsuarioStatus (
-                    "statusPortaUsuario",
-                    "idUsuario"
-                )
-            `)
+            .select('"idPortaUsuario","idPorta","idUsuario","status"')
             .order('idPortaUsuario', { ascending: true });
 
         if (this.currentUser.type !== 1) {
@@ -260,18 +253,13 @@ const AppData = {
         const { data, error } = await query;
         if (error) throw error;
 
-        this.doorRelations = (data || []).map(row => {
-            const statusRow = getStatusRow(row.PortaUsuarioStatus);
-            const blocked = Number(statusRow?.statusPortaUsuario || 0) === 1;
-
-            return {
-                id: row.idPortaUsuario,
-                doorId: row.idPorta,
-                userId: row.idUsuario,
-                blocked,
-                blockedByUserId: statusRow?.idUsuario || null,
-            };
-        });
+        this.doorRelations = (data || []).map(row => ({
+            id: row.idPortaUsuario,
+            doorId: row.idPorta,
+            userId: row.idUsuario,
+            blocked: Number(row.status || 0) === 1,
+            blockedByUserId: null,
+        }));
 
         this.applyDoorRelationsToUsers();
     },
@@ -311,7 +299,7 @@ const AppData = {
     async loadAccessLogs() {
         let query = this.supabase
             .from('Acesso')
-            .select('"idAcesso","horarioAcesso","statusAcesso","idUsuario","idPorta"')
+            .select('"idAcesso","horarioAcesso","saidaAcesso","statusAcesso","idUsuario","idPorta"')
             .order('horarioAcesso', { ascending: false });
 
         if (this.currentUser.type !== 1) {
@@ -321,14 +309,89 @@ const AppData = {
         const { data, error } = await query;
         if (error) throw error;
 
-        this.accessLogs = (data || []).map(log => ({
-            id: log.idAcesso,
-            userId: log.idUsuario,
-            doorId: log.idPorta,
-            event: Number(log.statusAcesso) === 1 ? 'Entrou' : 'Falhou',
-            statusCode: log.statusAcesso,
-            time: log.horarioAcesso,
-        }));
+        const accessRows = data || [];
+        const accessIds = accessRows.map(log => log.idAcesso);
+        let totalAccessRows = [];
+        let flowAccessRows = [];
+
+        if (accessIds.length > 0) {
+            const [{ data: totalData, error: totalError }, { data: flowData, error: flowError }] = await Promise.all([
+                this.supabase
+                    .from('TotalAcesso')
+                    .select('"idTotalAcesso","qtdEntrada","qtdSaida","idAcesso"')
+                    .in('idAcesso', accessIds),
+                this.supabase
+                    .from('FluxoAcesso')
+                    .select('"idFluxoAcesso","statusFluxoAcesso","horario","idAcesso"')
+                    .in('idAcesso', accessIds)
+                    .order('horario', { ascending: false }),
+            ]);
+
+            if (totalError) throw totalError;
+            if (flowError) throw flowError;
+
+            totalAccessRows = totalData || [];
+            flowAccessRows = flowData || [];
+        }
+
+        const totalAccessByAccessId = new Map(
+            totalAccessRows.map(row => [
+                row.idAcesso,
+                {
+                    id: row.idTotalAcesso,
+                    qtdEntrada: Number(row.qtdEntrada || 0),
+                    qtdSaida: Number(row.qtdSaida || 0),
+                },
+            ])
+        );
+
+        const flowAccessByAccessId = flowAccessRows.reduce((map, row) => {
+            const items = map.get(row.idAcesso) || [];
+            items.push({
+                id: row.idFluxoAcesso,
+                accessId: row.idAcesso,
+                statusCode: Number(row.statusFluxoAcesso),
+                event: Number(row.statusFluxoAcesso) === 1 ? 'Entrada' : 'Saida',
+                time: row.horario,
+            });
+            map.set(row.idAcesso, items);
+            return map;
+        }, new Map());
+
+        this.accessLogs = accessRows.map(log => {
+            const totalAccess = totalAccessByAccessId.get(log.idAcesso) || null;
+            const flowRows = flowAccessByAccessId.get(log.idAcesso) || [];
+
+            return {
+                id: log.idAcesso,
+                userId: log.idUsuario,
+                doorId: log.idPorta,
+                event: Number(log.statusAcesso) === 1 ? 'Entrou' : 'Falhou',
+                statusCode: log.statusAcesso,
+                time: log.horarioAcesso,
+                closeTime: log.saidaAcesso,
+                totalAccess,
+                flowAccess: flowRows.map(flow => ({
+                    ...flow,
+                    doorId: log.idPorta,
+                    userId: log.idUsuario,
+                })),
+            };
+        });
+
+        this.totalAccessLogs = this.accessLogs
+            .filter(log => log.totalAccess)
+            .map(log => ({
+                id: log.totalAccess.id,
+                accessId: log.id,
+                userId: log.userId,
+                doorId: log.doorId,
+                time: log.time,
+                qtdEntrada: log.totalAccess.qtdEntrada,
+                qtdSaida: log.totalAccess.qtdSaida,
+            }));
+
+        this.flowAccessLogs = this.accessLogs.flatMap(log => log.flowAccess);
     },
 
     applyDoorRelationsToUsers() {
@@ -401,18 +464,7 @@ const AppData = {
     },
 
     async deleteDoor(id) {
-        const relationIds = this.doorRelations
-            .filter(relation => relation.doorId === id)
-            .map(relation => relation.id);
-
-        if (relationIds.length > 0) {
-            const { error: statusError } = await this.supabase
-                .from('PortaUsuarioStatus')
-                .delete()
-                .in('idPortaUsuario', relationIds);
-
-            if (statusError) throw statusError;
-
+        if (this.doorRelations.some(relation => relation.doorId === id)) {
             const { error: relationError } = await this.supabase
                 .from('PortaUsuario')
                 .delete()
@@ -437,11 +489,11 @@ const AppData = {
             throw new Error('Porta nao encontrada.');
         }
 
-        if (isDoorOpen(door.status)) {
-            throw new Error(`A porta "${door.name}" ja esta aberta.`);
+        if (isDoorOpen(door.status) || door.opening) {
+            throw new Error(`A porta "${door.name}" nao esta disponivel no momento.`);
         }
 
-        const { error } = await this.supabase
+        const { error: accessError } = await this.supabase
             .from('Acesso')
             .insert({
                 idUsuario: this.currentUser.id,
@@ -449,18 +501,98 @@ const AppData = {
                 statusAcesso: 1,
             });
 
-        if (error) throw error;
+        if (accessError) throw accessError;
 
-        const { error: triggerError } = await this.supabase
+        const { data, error: triggerError } = await this.supabase
             .from('Porta')
             .update({
                 abrirPorta: true,
             })
-            .eq('idPorta', doorId);
+            .eq('idPorta', doorId)
+            .eq('abrirPorta', false)
+            .eq('statusPorta', 0)
+            .select('"idPorta"');
 
         if (triggerError) throw triggerError;
 
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error(`A porta "${door.name}" nao esta disponivel no momento.`);
+        }
+
         await this.logAction(ACTION_CODES.update, 'Porta');
+    },
+
+    isDoorBusy(doorId) {
+        const door = this.getDoorById(doorId);
+        if (!door) return false;
+        return isDoorOpen(door.status) || door.opening === true;
+    },
+
+    getFlowAccessLogsByDoor(doorId, options = {}) {
+        const statusCode = options.statusCode;
+        const onlyEntries = Boolean(options.onlyEntries);
+
+        return this.flowAccessLogs.filter(log => {
+            if (log.doorId !== doorId) return false;
+            if (statusCode !== undefined && log.statusCode !== statusCode) return false;
+            if (onlyEntries && log.statusCode !== 1) return false;
+            return true;
+        });
+    },
+
+    getMonthlyFlowAccessData(doorId, options = {}) {
+        const values = Array(12).fill(0);
+        const currentYear = new Date().getFullYear();
+
+        this.getFlowAccessLogsByDoor(doorId, options).forEach(log => {
+            const date = new Date(log.time);
+            if (Number.isNaN(date.getTime()) || date.getFullYear() !== currentYear) return;
+            values[date.getMonth()] += 1;
+        });
+
+        return values;
+    },
+
+    getHourlyFlowAccessData(doorId, options = {}) {
+        const values = Array(24).fill(0);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const currentDay = now.getDate();
+
+        this.getFlowAccessLogsByDoor(doorId, options).forEach(log => {
+            const date = new Date(log.time);
+            if (Number.isNaN(date.getTime())) return;
+            if (
+                date.getFullYear() !== currentYear ||
+                date.getMonth() !== currentMonth ||
+                date.getDate() !== currentDay
+            ) {
+                return;
+            }
+            values[date.getHours()] += 1;
+        });
+
+        return values;
+    },
+
+    getTotalAccessLogsByDoor(doorId) {
+        return this.totalAccessLogs.filter(log => log.doorId === doorId);
+    },
+
+    getPaginatedTotalAccessLogsByDoor(doorId, page = 1, pageSize = 5) {
+        const logs = this.getTotalAccessLogsByDoor(doorId);
+        const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
+        const safePage = Math.min(Math.max(page, 1), totalPages);
+        const startIndex = (safePage - 1) * pageSize;
+
+        return {
+            items: logs.slice(startIndex, startIndex + pageSize),
+            page: safePage,
+            totalPages,
+            totalItems: logs.length,
+            pageSize,
+        };
     },
 
     async createUser(payload) {
@@ -497,8 +629,9 @@ const AppData = {
             .insert({
                 idUsuario: userId,
                 idPorta: doorId,
+                status: 0,
             })
-            .select('"idPortaUsuario","idPorta","idUsuario"')
+            .select('"idPortaUsuario","idPorta","idUsuario","status"')
             .single();
 
         if (error) throw error;
@@ -511,13 +644,6 @@ const AppData = {
     async removeDoorFromUser(userId, doorId) {
         const relation = this.findDoorRelation(userId, doorId);
         if (!relation) return;
-
-        const { error: statusError } = await this.supabase
-            .from('PortaUsuarioStatus')
-            .delete()
-            .eq('idPortaUsuario', relation.id);
-
-        if (statusError) throw statusError;
 
         const { error } = await this.supabase
             .from('PortaUsuario')
@@ -535,35 +661,29 @@ const AppData = {
             throw new Error('Vinculo de porta nao encontrado para este usuario.');
         }
 
-        const { error: deleteError } = await this.supabase
-            .from('PortaUsuarioStatus')
-            .delete()
-            .eq('idPortaUsuario', relation.id);
-
-        if (deleteError) throw deleteError;
-
         const { error } = await this.supabase
-            .from('PortaUsuarioStatus')
-            .insert({
-                idPortaUsuario: relation.id,
-                statusPortaUsuario: 1,
-                idUsuario: this.currentUser.id,
-            });
+            .from('PortaUsuario')
+            .update({
+                status: 1,
+            })
+            .eq('idPortaUsuario', relation.id);
 
         if (error) throw error;
 
-        await this.logAction(ACTION_CODES.update, 'PortaUsuarioStatus');
+        await this.logAction(ACTION_CODES.update, 'PortaUsuario');
     },
 
     async unblockDoorForUserByRelation(relationId) {
         const { error } = await this.supabase
-            .from('PortaUsuarioStatus')
-            .delete()
+            .from('PortaUsuario')
+            .update({
+                status: 0,
+            })
             .eq('idPortaUsuario', relationId);
 
         if (error) throw error;
 
-        await this.logAction(ACTION_CODES.update, 'PortaUsuarioStatus');
+        await this.logAction(ACTION_CODES.update, 'PortaUsuario');
     },
 
     async toggleDoorBlock(userId, doorId) {
@@ -577,6 +697,19 @@ const AppData = {
         } else {
             await this.blockDoorForUser(userId, doorId);
         }
+    },
+
+    async setSecurityMode(enabled) {
+        const { error } = await this.supabase
+            .from('PortaUsuario')
+            .update({
+                status: enabled ? 1 : 0,
+            })
+            .neq('idPortaUsuario', 0);
+
+        if (error) throw error;
+
+        await this.logAction(ACTION_CODES.update, 'PortaUsuario');
     },
 
     async logAction(action, table) {
@@ -654,6 +787,21 @@ const AppData = {
         return this.accessLogs.filter(log => log.doorId === doorId);
     },
 
+    getPaginatedAccessLogsByDoor(doorId, page = 1, pageSize = 5) {
+        const logs = this.getAccessLogsByDoor(doorId);
+        const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
+        const safePage = Math.min(Math.max(page, 1), totalPages);
+        const startIndex = (safePage - 1) * pageSize;
+
+        return {
+            items: logs.slice(startIndex, startIndex + pageSize),
+            page: safePage,
+            totalPages,
+            totalItems: logs.length,
+            pageSize,
+        };
+    },
+
     getMonthlyAccessData(doorId) {
         const values = Array(12).fill(0);
         const currentYear = new Date().getFullYear();
@@ -688,5 +836,71 @@ const AppData = {
         });
 
         return values;
+    },
+
+    getFlowAccessLogsByDoor(doorId, options = {}) {
+        const statusCode = options.statusCode;
+
+        return this.flowAccessLogs.filter(log => {
+            if (log.doorId !== doorId) return false;
+            if (statusCode === undefined) return true;
+            return log.statusCode === statusCode;
+        });
+    },
+
+    getMonthlyFlowAccessData(doorId, options = {}) {
+        const values = Array(12).fill(0);
+        const currentYear = new Date().getFullYear();
+
+        this.getFlowAccessLogsByDoor(doorId, options).forEach(log => {
+            const date = new Date(log.time);
+            if (Number.isNaN(date.getTime()) || date.getFullYear() !== currentYear) return;
+            values[date.getMonth()] += 1;
+        });
+
+        return values;
+    },
+
+    getHourlyFlowAccessData(doorId, options = {}) {
+        const values = Array(24).fill(0);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const currentDay = now.getDate();
+
+        this.getFlowAccessLogsByDoor(doorId, options).forEach(log => {
+            const date = new Date(log.time);
+            if (Number.isNaN(date.getTime())) return;
+            if (
+                date.getFullYear() !== currentYear ||
+                date.getMonth() !== currentMonth ||
+                date.getDate() !== currentDay
+            ) {
+                return;
+            }
+
+            values[date.getHours()] += 1;
+        });
+
+        return values;
+    },
+
+    getLatestAccessLogByDoor(doorId) {
+        return this.getAccessLogsByDoor(doorId)[0] || null;
+    },
+
+    getCurrentAccessOccupancy(doorId) {
+        const latestAccess = this.getLatestAccessLogByDoor(doorId);
+        if (!latestAccess) return 0;
+        if (latestAccess.closeTime) return 0;
+
+        const entries = this.getFlowAccessLogsByDoor(doorId, { statusCode: 1 })
+            .filter(log => log.accessId === latestAccess.id)
+            .length;
+        const exits = this.getFlowAccessLogsByDoor(doorId, { statusCode: 0 })
+            .filter(log => log.accessId === latestAccess.id)
+            .length;
+
+        return Math.max(entries - exits, 0);
     },
 };

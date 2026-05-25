@@ -33,7 +33,6 @@ body {
     background-color: var(--bg-main);
     color: var(--text-main);
     font-family: 'Segoe UI', Tahoma, sans-serif;
-    display: flex;
     height: 100vh;
     overflow: hidden;
 }
@@ -140,7 +139,8 @@ body {
 .btn-login:disabled { opacity: 0.75; cursor: wait; }
 
 .main-wrapper {
-    flex: 1;
+    width: 100%;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -155,6 +155,25 @@ header {
     box-shadow: 0 4px 14px rgba(0,0,0,0.4);
     z-index: 50;
     flex-shrink: 0;
+}
+
+.btn-menu-toggle {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.24);
+    background: rgba(0,0,0,0.22);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    transition: var(--transition);
+}
+
+.btn-menu-toggle:hover {
+    background: rgba(255,255,255,0.14);
 }
 
 .header-name { font-size: 14px; font-weight: 600; }
@@ -314,6 +333,67 @@ header {
     }
     .login-brand {
         padding: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    header {
+        padding: 10px 14px;
+    }
+
+    .header-user {
+        gap: 10px;
+    }
+
+    .header-name {
+        font-size: 13px;
+    }
+
+    .header-role {
+        font-size: 10px;
+    }
+
+    .view-area {
+        padding: 18px 14px 22px;
+    }
+
+    .toolbar {
+        gap: 12px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .search-container {
+        max-width: 100%;
+    }
+
+    .search-bar {
+        padding: 11px 16px 11px 42px;
+        font-size: 14px;
+    }
+
+    .btn-new-item {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+
+    .btn-panic {
+        padding: 8px 12px;
+        font-size: 12px;
+        gap: 8px;
+    }
+
+    .cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 16px;
+    }
+
+    .table-wrapper {
+        max-height: 190px;
+    }
+
+    .header-user i {
+        font-size: 30px !important;
     }
 }
 
