@@ -90,6 +90,14 @@ function isDoorOpen(value) {
     return value === 'open';
 }
 
+function normalizeDoorOpening(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+}
+
+function normalizeDoorBlocked(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
+}
+
 function normalizeUserStatus(value) {
     return Number(value) === 1 ? 'blocked' : 'active';
 }
